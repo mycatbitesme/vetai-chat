@@ -93,7 +93,7 @@ export default function Chat() {
             <MessageCircle className="h-4 w-4 text-white" />
           </div>
           <div>
-            <h1 className="font-semibold text-gray-900">Shelter Assistant</h1>
+            <h1 className="font-semibold text-gray-900">VetAI Chat</h1>
             <p className="text-sm text-gray-500">{userProfile?.shelter_name}</p>
           </div>
         </div>

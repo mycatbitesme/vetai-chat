@@ -16,8 +16,12 @@ export function AuthProvider({ children }) {
   const [userProfile, setUserProfile] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  // Add debug logging
+  console.log('AuthProvider render - loading:', loading, 'user:', !!user, 'userProfile:', !!userProfile)
+
   // Memoize fetchUserProfile to prevent recreating it on every render
   const fetchUserProfile = useCallback(async (userId) => {
+    console.log('fetchUserProfile called for userId:', userId)
     try {
       const { data, error } = await supabase
         .from('user_profiles')
@@ -25,7 +29,11 @@ export function AuthProvider({ children }) {
         .eq('user_id', userId)
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('fetchUserProfile error:', error)
+        throw error
+      }
+      console.log('fetchUserProfile success:', !!data)
       setUserProfile(data)
     } catch (error) {
       console.error('Error fetching user profile:', error)
@@ -33,12 +41,19 @@ export function AuthProvider({ children }) {
   }, [])
 
   useEffect(() => {
+    console.log('AuthContext useEffect starting')
+    
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Initial session loaded:', !!session?.user)
       setUser(session?.user ?? null)
       if (session?.user) {
         fetchUserProfile(session.user.id)
       }
+      console.log('Setting loading to false (initial)')
+      setLoading(false)
+    }).catch(error => {
+      console.error('Error getting initial session:', error)
       setLoading(false)
     })
 
@@ -46,19 +61,25 @@ export function AuthProvider({ children }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state change:', event, !!session?.user)
       setUser(session?.user ?? null)
       if (session?.user) {
         await fetchUserProfile(session.user.id)
       } else {
         setUserProfile(null)
       }
+      console.log('Setting loading to false (auth change)')
       setLoading(false)
     })
 
-    return () => subscription.unsubscribe()
-  }, [fetchUserProfile]) // Added fetchUserProfile to dependencies
+    return () => {
+      console.log('AuthContext cleanup - unsubscribing')
+      subscription.unsubscribe()
+    }
+  }, [fetchUserProfile])
 
   const signIn = async (email, password) => {
+    console.log('signIn called')
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -67,6 +88,7 @@ export function AuthProvider({ children }) {
   }
 
   const signOut = async () => {
+    console.log('signOut called')
     const { error } = await supabase.auth.signOut()
     return { error }
   }

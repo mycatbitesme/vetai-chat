@@ -92,19 +92,13 @@ export function AuthProvider({ children }) {
     try {
       const { error } = await supabase.auth.signOut()
       console.log('signOut completed, error:', error)
-      
-      // Force loading to false if signOut doesn't trigger auth state change
-      setTimeout(() => {
-        console.log('signOut timeout - forcing loading to false')
-        setLoading(false)
-        setUser(null)
-        setUserProfile(null)
-      }, 2000) // 2 second timeout
-      
       return { error }
     } catch (error) {
       console.error('signOut exception:', error)
+      // Only force reset on actual errors
       setLoading(false)
+      setUser(null)
+      setUserProfile(null)
       return { error }
     }
   }

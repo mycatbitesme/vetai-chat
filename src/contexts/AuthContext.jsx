@@ -37,6 +37,8 @@ export function AuthProvider({ children }) {
       setUserProfile(data)
     } catch (error) {
       console.error('Error fetching user profile:', error)
+      // IMPORTANT: Reset userProfile on error to prevent infinite loading
+      setUserProfile(null)
     }
   }, [])
 
@@ -48,10 +50,14 @@ export function AuthProvider({ children }) {
       console.log('Initial session loaded:', !!session?.user)
       setUser(session?.user ?? null)
       if (session?.user) {
-        fetchUserProfile(session.user.id)
+        fetchUserProfile(session.user.id).finally(() => {
+          console.log('Setting loading to false (initial)')
+          setLoading(false)
+        })
+      } else {
+        console.log('Setting loading to false (initial - no user)')
+        setLoading(false)
       }
-      console.log('Setting loading to false (initial)')
-      setLoading(false)
     }).catch(error => {
       console.error('Error getting initial session:', error)
       setLoading(false)
@@ -63,13 +69,22 @@ export function AuthProvider({ children }) {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state change:', event, !!session?.user)
       setUser(session?.user ?? null)
+      
       if (session?.user) {
-        await fetchUserProfile(session.user.id)
+        // Ensure loading is reset even if fetchUserProfile fails
+        try {
+          await fetchUserProfile(session.user.id)
+        } catch (error) {
+          console.error('Error in auth state change profile fetch:', error)
+        } finally {
+          console.log('Setting loading to false (auth change)')
+          setLoading(false)
+        }
       } else {
         setUserProfile(null)
+        console.log('Setting loading to false (auth change - no user)')
+        setLoading(false)
       }
-      console.log('Setting loading to false (auth change)')
-      setLoading(false)
     })
 
     return () => {

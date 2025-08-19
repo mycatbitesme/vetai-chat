@@ -110,24 +110,29 @@ export function AuthProvider({ children }) {
       // Add a timeout to prevent hanging
       const signOutPromise = supabase.auth.signOut()
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Sign out timeout')), 5000)
+        setTimeout(() => reject(new Error('TIMEOUT')), 5000)
       )
       
-      const { error } = await Promise.race([signOutPromise, timeoutPromise])
-      console.log('signOut completed, error:', error)
+      const result = await Promise.race([signOutPromise, timeoutPromise])
+      console.log('signOut completed successfully')
       
-      // Force reset state regardless of error
+      // Force reset state regardless of success
       setTimeout(() => {
-        console.log('Force resetting auth state after signOut')
+        console.log('Resetting auth state after successful signOut')
         setUser(null)
         setUserProfile(null)
         setLoading(false)
       }, 100)
       
-      return { error }
+      return { error: result?.error || null }
     } catch (error) {
-      console.error('signOut exception:', error)
-      // Force reset on exceptions (including timeout)
+      if (error.message === 'TIMEOUT') {
+        console.log('signOut timed out - forcing logout')
+      } else {
+        console.error('signOut exception:', error)
+      }
+      
+      // Force reset on any error (including timeout)
       setUser(null)
       setUserProfile(null)
       setLoading(false)

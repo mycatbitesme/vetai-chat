@@ -19,16 +19,19 @@ export function AuthProvider({ children }) {
   const [userProfile, setUserProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [profileFetchFailed, setProfileFetchFailed] = useState(false)
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
 
   // Add debug logging
   console.log('AuthProvider render - loading:', loading, 'user:', !!user, 'userProfile:', !!userProfile)
 
   // Memoize fetchUserProfile to prevent recreating it on every render
-  const fetchUserProfile = useCallback(async (userId) => {
-    console.log('fetchUserProfile called for userId:', userId)
+  const fetchUserProfile = useCallback(async (userId, retryCount = 0) => {
+    console.log('fetchUserProfile called for userId:', userId, 'retry:', retryCount)
     setProfileFetchFailed(false) // Reset failure state
     try {
-      // Add timeout to fetchUserProfile
+      // Longer timeout, and even longer for retries
+      const timeoutMs = isInitialLoad ? 15000 : 30000 // 15s initial, 30s for retries
+      
       const profilePromise = supabase
         .from('user_profiles')
         .select('*')
@@ -36,7 +39,7 @@ export function AuthProvider({ children }) {
         .single()
       
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('PROFILE_FETCH_TIMEOUT')), 8000)
+        setTimeout(() => reject(new Error('PROFILE_FETCH_TIMEOUT')), timeoutMs)
       )
       
       const { data, error } = await Promise.race([profilePromise, timeoutPromise])
@@ -49,15 +52,36 @@ export function AuthProvider({ children }) {
       setUserProfile(data)
     } catch (error) {
       if (error.message === 'PROFILE_FETCH_TIMEOUT') {
-        console.log('fetchUserProfile timed out - marking as failed')
+        console.log('fetchUserProfile timed out, retry count:', retryCount)
+        
+        // Retry once before giving up, but only during initial load
+        if (retryCount === 0 && isInitialLoad) {
+          console.log('Retrying profile fetch...')
+          return await fetchUserProfile(userId, 1)
+        }
+        
+        // Only mark as failed during initial load
+        if (isInitialLoad) {
+          console.log('fetchUserProfile timed out after retry - marking as failed')
+          setProfileFetchFailed(true)
+        } else {
+          console.log('fetchUserProfile timed out during normal usage - keeping existing profile')
+          // Don't set profileFetchFailed during normal usage
+        }
       } else {
         console.error('Error fetching user profile:', error)
+        // Only mark as failed during initial load for non-timeout errors too
+        if (isInitialLoad) {
+          setProfileFetchFailed(true)
+        }
       }
-      // Mark profile fetch as failed and clear profile
-      setProfileFetchFailed(true)
-      setUserProfile(null)
+      
+      // Only clear profile during initial load
+      if (isInitialLoad) {
+        setUserProfile(null)
+      }
     }
-  }, [])
+  }, [isInitialLoad])
 
   useEffect(() => {
     console.log('AuthContext useEffect starting')
@@ -79,10 +103,12 @@ export function AuthProvider({ children }) {
         fetchUserProfile(session.user.id).finally(() => {
           console.log('Setting loading to false (initial)')
           setLoading(false)
+          setIsInitialLoad(false) // Mark initial load as complete
         })
       } else {
         console.log('Setting loading to false (initial - no user)')
         setLoading(false)
+        setIsInitialLoad(false) // Mark initial load as complete
       }
     }).catch(error => {
       clearTimeout(sessionTimeout) // Clear timeout on error
@@ -113,6 +139,7 @@ export function AuthProvider({ children }) {
         } finally {
           console.log('Setting loading to false (auth change)')
           setLoading(false)
+          setIsInitialLoad(false) // Mark initial load as complete
         }
       } else {
         setUserProfile(null)

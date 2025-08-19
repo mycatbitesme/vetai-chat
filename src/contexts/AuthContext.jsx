@@ -104,16 +104,33 @@ export function AuthProvider({ children }) {
 
   const signOut = async () => {
     console.log('signOut called')
+    setLoading(true) // Show loading state during sign out
+    
     try {
-      const { error } = await supabase.auth.signOut()
+      // Add a timeout to prevent hanging
+      const signOutPromise = supabase.auth.signOut()
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Sign out timeout')), 5000)
+      )
+      
+      const { error } = await Promise.race([signOutPromise, timeoutPromise])
       console.log('signOut completed, error:', error)
+      
+      // Force reset state regardless of error
+      setTimeout(() => {
+        console.log('Force resetting auth state after signOut')
+        setUser(null)
+        setUserProfile(null)
+        setLoading(false)
+      }, 100)
+      
       return { error }
     } catch (error) {
       console.error('signOut exception:', error)
-      // Only force reset on actual errors
-      setLoading(false)
+      // Force reset on exceptions (including timeout)
       setUser(null)
       setUserProfile(null)
+      setLoading(false)
       return { error }
     }
   }

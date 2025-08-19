@@ -26,11 +26,18 @@ export function AuthProvider({ children }) {
   const fetchUserProfile = useCallback(async (userId) => {
     console.log('fetchUserProfile called for userId:', userId)
     try {
-      const { data, error } = await supabase
+      // Add timeout to fetchUserProfile
+      const profilePromise = supabase
         .from('user_profiles')
         .select('*')
         .eq('user_id', userId)
         .single()
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('PROFILE_FETCH_TIMEOUT')), 8000)
+      )
+      
+      const { data, error } = await Promise.race([profilePromise, timeoutPromise])
 
       if (error) {
         console.error('fetchUserProfile error:', error)
@@ -39,7 +46,11 @@ export function AuthProvider({ children }) {
       console.log('fetchUserProfile success:', !!data)
       setUserProfile(data)
     } catch (error) {
-      console.error('Error fetching user profile:', error)
+      if (error.message === 'PROFILE_FETCH_TIMEOUT') {
+        console.log('fetchUserProfile timed out - continuing without profile')
+      } else {
+        console.error('Error fetching user profile:', error)
+      }
       // IMPORTANT: Reset userProfile on error to prevent infinite loading
       setUserProfile(null)
     }

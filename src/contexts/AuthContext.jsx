@@ -49,7 +49,7 @@ export function AuthProvider({ children }) {
     console.log('AuthContext useEffect starting')
     
     // Add timeout for initial session loading
-    const sessionTimeout = setTimeout(() => {
+    let sessionTimeout = setTimeout(() => {
       console.log('Initial session loading timed out - forcing no session')
       setUser(null)
       setUserProfile(null)
@@ -84,6 +84,10 @@ export function AuthProvider({ children }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state change:', event, !!session?.user)
+      
+      // Clear timeout when auth state changes (successful sign in)
+      clearTimeout(sessionTimeout)
+      
       setUser(session?.user ?? null)
       
       if (session?.user) {
@@ -105,6 +109,7 @@ export function AuthProvider({ children }) {
 
     return () => {
       console.log('AuthContext cleanup - unsubscribing')
+      clearTimeout(sessionTimeout) // Clean up timeout on unmount
       subscription.unsubscribe()
     }
   }, [fetchUserProfile])

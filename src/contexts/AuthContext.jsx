@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
+// Get supabaseUrl for storage cleanup
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+
 const AuthContext = createContext()
 
 export function useAuth() {
@@ -45,8 +48,17 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     console.log('AuthContext useEffect starting')
     
+    // Add timeout for initial session loading
+    const sessionTimeout = setTimeout(() => {
+      console.log('Initial session loading timed out - forcing no session')
+      setUser(null)
+      setUserProfile(null)
+      setLoading(false)
+    }, 10000) // 10 second timeout
+    
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      clearTimeout(sessionTimeout) // Clear timeout since we got a response
       console.log('Initial session loaded:', !!session?.user)
       setUser(session?.user ?? null)
       if (session?.user) {
@@ -59,7 +71,11 @@ export function AuthProvider({ children }) {
         setLoading(false)
       }
     }).catch(error => {
+      clearTimeout(sessionTimeout) // Clear timeout on error
       console.error('Error getting initial session:', error)
+      // Clear any corrupted session data
+      setUser(null)
+      setUserProfile(null)
       setLoading(false)
     })
 
@@ -113,7 +129,7 @@ export function AuthProvider({ children }) {
         setTimeout(() => reject(new Error('TIMEOUT')), 5000)
       )
       
-      const result = await Promise.race([signOutPromise, timeoutPromise])
+      const { error } = await Promise.race([signOutPromise, timeoutPromise])
       console.log('signOut completed successfully')
       
       // Force reset state regardless of success
@@ -124,10 +140,18 @@ export function AuthProvider({ children }) {
         setLoading(false)
       }, 100)
       
-      return { error: result?.error || null }
+      return { error }
     } catch (error) {
       if (error.message === 'TIMEOUT') {
         console.log('signOut timed out - forcing logout')
+        // Clear all stored session data to prevent reload issues
+        try {
+          localStorage.removeItem('supabase.auth.token')
+          localStorage.removeItem('sb-' + supabaseUrl.split('//')[1] + '-auth-token')
+          sessionStorage.clear()
+        } catch (e) {
+          console.log('Could not clear storage:', e)
+        }
       } else {
         console.error('signOut exception:', error)
       }

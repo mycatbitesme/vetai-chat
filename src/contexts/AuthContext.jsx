@@ -54,7 +54,7 @@ export function AuthProvider({ children }) {
       setUser(null)
       setUserProfile(null)
       setLoading(false)
-    }, 10000) // 10 second timeout
+    }, 5000) // 5 second timeout
     
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
